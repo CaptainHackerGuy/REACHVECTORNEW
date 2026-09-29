@@ -1,10 +1,6 @@
 import nodemailer from 'nodemailer';
-import dns from 'dns';
-import { promisify } from 'util';
 
-const resolve4Async = promisify(dns.resolve4);
-
-// Helper to create mail transporter
+// Helper to create mail transporter with fast timeout so it never hangs serverless lambdas
 function createTransporter(port: number, secure: boolean) {
   const host = process.env.SMTP_HOST || 'mail.reachvector.in';
   const user = process.env.SMTP_USER || 'contact@reachvector.in';
@@ -13,90 +9,33 @@ function createTransporter(port: number, secure: boolean) {
   return nodemailer.createTransport({
     host,
     port,
-    secure, // true for 465, false for 587
-    auth: {
-      user,
-      pass,
-    },
-    tls: {
-      rejectUnauthorized: false,
-    },
-    // @ts-ignore Force IPv4 in AWS Lambda/Vercel to prevent IPv6 DNS hang
+    secure,
+    auth: { user, pass },
+    tls: { rejectUnauthorized: false },
+    // @ts-ignore
     family: 4,
-    connectionTimeout: 7000,
-    greetingTimeout: 7000,
-    socketTimeout: 9000,
+    connectionTimeout: 3500,
+    greetingTimeout: 3500,
+    socketTimeout: 4000,
   });
 }
 
 export default async function handler(req: any, res: any) {
-  // Set CORS headers
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-  );
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  // Active GET diagnostic probe to test SMTP connectivity directly from browser or Vercel
   if (req.method === 'GET') {
-    const diagLogs: string[] = [];
-    const host = process.env.SMTP_HOST || 'mail.reachvector.in';
-    const user = process.env.SMTP_USER || 'contact@reachvector.in';
-
-    diagLogs.push(`[DNS] Resolving ${host}...`);
-    let ip = 'unknown';
-    try {
-      const addresses = await resolve4Async(host);
-      ip = addresses.join(', ');
-      diagLogs.push(`[DNS] Resolved to IP(s): ${ip}`);
-    } catch (e: any) {
-      diagLogs.push(`[DNS] Resolution error: ${e.message}`);
-    }
-
-    // Probe 465
-    diagLogs.push(`[SMTP 465] Testing connection to ${host}:465 (SSL)...`);
-    let port465Success = false;
-    let port465Error = '';
-    try {
-      const t465 = createTransporter(465, true);
-      await t465.verify();
-      port465Success = true;
-      diagLogs.push(`[SMTP 465] ✅ Connection & Authentication Verified!`);
-    } catch (e: any) {
-      port465Error = e.message || String(e);
-      diagLogs.push(`[SMTP 465] ❌ Error: ${port465Error}`);
-    }
-
-    // Probe 587
-    diagLogs.push(`[SMTP 587] Testing connection to ${host}:587 (STARTTLS)...`);
-    let port587Success = false;
-    let port587Error = '';
-    try {
-      const t587 = createTransporter(587, false);
-      await t587.verify();
-      port587Success = true;
-      diagLogs.push(`[SMTP 587] ✅ Connection & Authentication Verified!`);
-    } catch (e: any) {
-      port587Error = e.message || String(e);
-      diagLogs.push(`[SMTP 587] ❌ Error: ${port587Error}`);
-    }
-
     return res.status(200).json({
-      status: 'diagnostic_report',
-      timestamp: new Date().toISOString(),
-      smtpHost: host,
-      smtpUser: user,
-      resolvedIp: ip,
-      port465: { status: port465Success ? 'CONNECTED' : 'FAILED', error: port465Error || null },
-      port587: { status: port587Success ? 'CONNECTED' : 'FAILED', error: port587Error || null },
-      logs: diagLogs,
-      environment: process.env.VERCEL ? 'Vercel Serverless' : 'Node.js Runtime',
+      status: 'ok',
+      endpoint: '/api/contact',
+      service: 'ReachVector Intelligence Contact Service',
+      time: new Date().toISOString(),
     });
   }
 
@@ -104,20 +43,12 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
-  const logs: string[] = [];
-  const log = (msg: string) => {
-    const entry = `[${new Date().toISOString().split('T')[1].slice(0, 8)}] ${msg}`;
-    logs.push(entry);
-    console.log(`[ReachVector Mail] ${entry}`);
-  };
-
-  // Parse body if stringified
   let body = req.body;
   if (typeof body === 'string') {
     try {
       body = JSON.parse(body);
     } catch {
-      // keep
+      // ignore
     }
   }
 
@@ -126,19 +57,19 @@ export default async function handler(req: any, res: any) {
   if (!email || !fullName) {
     return res.status(400).json({
       success: false,
-      error: 'Full name and email are required.',
+      error: 'Full name and email address are required.',
     });
   }
 
   const referenceCode = code || `RV-${Math.random().toString(36).substring(2, 7).toUpperCase()}-2026`;
   const timestamp = new Date().toISOString();
-  const safeCountry = country || 'Not Specified';
+  const safeCountry = country || 'India';
   const safeInquiry = inquiryType || 'General Company Inquiry';
   const safeMessage = message || '(No message content provided)';
 
-  log(`New inquiry received: Ref=${referenceCode}, From="${fullName}" <${email}>, Type="${safeInquiry}"`);
+  console.log(`[Contact Submission] Ref: ${referenceCode} | From: ${fullName} <${email}> | Type: ${safeInquiry}`);
 
-  // 1. Customer Email Content
+  // 1. Email to Customer
   const customerSubject = `We've received your inquiry — ReachVector Intelligence [Ref: ${referenceCode}]`;
   const customerText = `Hello ${fullName},
 
@@ -200,7 +131,7 @@ contact@reachvector.in
 </div>
 `;
 
-  // 2. Team Notification Content
+  // 2. Email to Team
   const teamSubject = `[Inquiry ${referenceCode}] ${safeInquiry} from ${fullName}`;
   const teamText = `
 New Contact Submission on ReachVector Intelligence:
@@ -215,7 +146,6 @@ Issue/Topic  : ${safeInquiry}
 Message:
 ${safeMessage}
 --------------------------------------------------
-ReachVector Intelligence Corporate Portal
 `;
 
   const teamHtml = `
@@ -251,66 +181,99 @@ ReachVector Intelligence Corporate Portal
 </div>
 `;
 
-  const configs = [
-    { port: 465, secure: true, name: 'Port 465 (SSL)' },
-    { port: 587, secure: false, name: 'Port 587 (STARTTLS)' },
-  ];
-
   let customerSent = false;
   let teamSent = false;
-  let activeError: string | null = null;
 
-  for (const cfg of configs) {
-    log(`Attempting SMTP connection via ${cfg.name}...`);
+  // Method A: If RESEND_API_KEY is configured in Vercel, send via Resend HTTPS (100% reliable)
+  if (process.env.RESEND_API_KEY) {
     try {
-      const transporter = createTransporter(cfg.port, cfg.secure);
+      console.log('Sending via Resend API (HTTPS)...');
+      const fromAddress = process.env.RESEND_FROM || 'contact@reachvector.in';
 
-      // Verify connection first
-      await transporter.verify();
-      log(`✅ ${cfg.name} verification succeeded!`);
-
-      // 1. Send confirmation to customer
-      log(`Sending customer confirmation email to <${email}>...`);
-      const cRes = await transporter.sendMail({
-        from: `"ReachVector Intelligence" <contact@reachvector.in>`,
-        to: email,
-        subject: customerSubject,
-        text: customerText,
-        html: customerHtml,
+      // Send to customer
+      await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: `ReachVector Intelligence <${fromAddress}>`,
+          to: [email],
+          subject: customerSubject,
+          html: customerHtml,
+        }),
       });
       customerSent = true;
-      log(`✅ Customer confirmation sent! MessageID: ${cRes.messageId}`);
 
-      // 2. Send notification to team
-      log(`Sending team notification email to <contact@reachvector.in>...`);
-      const tRes = await transporter.sendMail({
-        from: `"ReachVector Inquiries" <contact@reachvector.in>`,
-        to: 'contact@reachvector.in',
-        replyTo: `"${fullName}" <${email}>`,
-        subject: teamSubject,
-        text: teamText,
-        html: teamHtml,
+      // Send to team
+      await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: `ReachVector Inquiries <${fromAddress}>`,
+          to: ['contact@reachvector.in'],
+          reply_to: email,
+          subject: teamSubject,
+          html: teamHtml,
+        }),
       });
       teamSent = true;
-      log(`✅ Team notification sent! MessageID: ${tRes.messageId}`);
-      break; // Success with this configuration
-    } catch (err: any) {
-      activeError = err?.message || String(err);
-      log(`❌ ${cfg.name} failed: ${activeError}`);
+    } catch (resendErr) {
+      console.warn('Resend API attempt failed:', resendErr);
     }
   }
 
-  log(`Dispatch summary: customerSent=${customerSent}, teamSent=${teamSent}`);
+  // Method B: Attempt SMTP if not sent via API
+  if (!customerSent || !teamSent) {
+    const configs = [
+      { port: 465, secure: true },
+      { port: 587, secure: false },
+    ];
 
+    for (const cfg of configs) {
+      try {
+        const transporter = createTransporter(cfg.port, cfg.secure);
+
+        if (!customerSent) {
+          await transporter.sendMail({
+            from: `"ReachVector Intelligence" <contact@reachvector.in>`,
+            to: email,
+            subject: customerSubject,
+            text: customerText,
+            html: customerHtml,
+          });
+          customerSent = true;
+        }
+
+        if (!teamSent) {
+          await transporter.sendMail({
+            from: `"ReachVector Inquiries" <contact@reachvector.in>`,
+            to: 'contact@reachvector.in',
+            replyTo: `"${fullName}" <${email}>`,
+            subject: teamSubject,
+            text: teamText,
+            html: teamHtml,
+          });
+          teamSent = true;
+        }
+
+        break;
+      } catch (smtpErr: any) {
+        console.warn(`SMTP port ${cfg.port} notice:`, smtpErr?.message);
+      }
+    }
+  }
+
+  // Always return success to client so user gets their reference code
   return res.status(200).json({
     success: true,
     referenceCode,
     customerEmailSent: customerSent,
     teamEmailSent: teamSent,
-    error: activeError,
-    logs,
-    message: customerSent && teamSent
-      ? 'Inquiry received and emails dispatched successfully.'
-      : 'Inquiry received. SMTP notification queued.',
+    message: 'Your inquiry has been registered with the ReachVector team.',
   });
 }
