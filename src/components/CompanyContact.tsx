@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { COUNTRIES } from '../data/countries.ts';
-import { Mail, MapPin, Send, CheckCircle2, Copy, Check, Clock, ShieldCheck } from 'lucide-react';
+import { Mail, MapPin, Send, CheckCircle2, Copy, Check } from 'lucide-react';
 
 export const CompanyContact: React.FC = () => {
   const [fullName, setFullName] = useState('');
@@ -159,26 +159,6 @@ export const CompanyContact: React.FC = () => {
                     </div>
                   </div>
                 </div>
-
-                <div className="flex items-start gap-3">
-                  <Clock className="w-4 h-4 text-slate-600 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="text-slate-500 text-xs block">Support Window</span>
-                    <span className="font-medium text-slate-800">
-                      Monday – Friday, 9:00 AM – 6:00 PM IST
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="text-slate-500 text-xs block">Response Commitment</span>
-                    <span className="font-medium text-slate-800">
-                      All inquiries answered within 1 business day
-                    </span>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -194,7 +174,7 @@ export const CompanyContact: React.FC = () => {
                 <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mb-4">
                   <CheckCircle2 className="w-7 h-7" />
                 </div>
-                <h3 className="text-2xl font-bold text-slate-900 mb-2">Message Transmitted</h3>
+                <h3 className="text-2xl font-bold text-slate-900 mb-2">Message Sent</h3>
                 <p className="text-sm text-slate-600 max-w-md mb-6">
                   Thank you, <strong className="text-slate-900">{fullName || 'Inquirer'}</strong>. Our team has received your communication regarding <strong className="text-slate-900">{inquiryType}</strong>.
                 </p>
@@ -341,7 +321,7 @@ export const CompanyContact: React.FC = () => {
                       <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
                     ) : (
                       <>
-                        <span>Transmit Message</span>
+                        <span>Send Message</span>
                         <Send className="w-3.5 h-3.5" />
                       </>
                     )}
