@@ -69,10 +69,8 @@ export const TermsModal: React.FC<TermsModalProps> = ({
           {activeTab === 'terms' ? (
             <div className="space-y-4">
               <div className="border-b border-slate-100 pb-3">
-                <h3 className="text-base font-bold text-slate-900">ReachVector Intelligence LLP — Terms &amp; Conditions</h3>
+                <h3 className="text-base font-bold text-slate-900">ReachVector Intelligence — Terms &amp; Conditions</h3>
                 <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
-                  <span>LLPIN: ADC-7323</span>
-                  <span>•</span>
                   <span>Effective Date: September 2026</span>
                 </div>
               </div>
@@ -80,7 +78,7 @@ export const TermsModal: React.FC<TermsModalProps> = ({
               <div>
                 <h4 className="font-bold text-slate-900 mb-1">1. Acceptance of Terms</h4>
                 <p className="text-slate-600">
-                  By accessing the ReachVector Intelligence LLP website or ordering hardware devices (including PurrfectBackup), you agree to be bound by these Terms of Service and applicable commercial regulations.
+                  By accessing the ReachVector Intelligence website or ordering hardware devices (including PurrfectBackup), you agree to be bound by these Terms of Service and applicable commercial regulations.
                 </p>
               </div>
 
@@ -94,15 +92,14 @@ export const TermsModal: React.FC<TermsModalProps> = ({
               <div>
                 <h4 className="font-bold text-slate-900 mb-1">3. Warranty &amp; Hardware Liability</h4>
                 <p className="text-slate-600">
-                  ReachVector Intelligence LLP warrants that our physical hardware units are free from manufacturing defects for a period of one (1) full year from the date of receipt. Because storage memory cards and third-party host drives are manufactured independently, creators are advised to maintain verified dual backups according to industry standard procedures.
+                  ReachVector Intelligence warrants that our physical hardware units are free from manufacturing defects for a period of one (1) full year from the date of receipt. Because storage memory cards and third-party host drives are manufactured independently, creators are advised to maintain verified dual backups according to industry standard procedures.
                 </p>
               </div>
 
               <div>
-                <h4 className="font-bold text-slate-900 mb-1">4. Legal Entity &amp; Notices</h4>
+                <h4 className="font-bold text-slate-900 mb-1">4. Notices &amp; Correspondence</h4>
                 <p className="text-slate-600">
-                  ReachVector Intelligence LLP<br />
-                  LLPIN: ADC-7323<br />
+                  ReachVector Intelligence<br />
                   #38, Bellandur, Bengaluru, Karnataka 560103, India<br />
                   Direct correspondence: <a href="mailto:contact@reachvector.in" className="text-slate-900 underline font-medium">contact@reachvector.in</a>
                 </p>
@@ -111,10 +108,8 @@ export const TermsModal: React.FC<TermsModalProps> = ({
           ) : (
             <div className="space-y-4">
               <div className="border-b border-slate-100 pb-3">
-                <h3 className="text-base font-bold text-slate-900">ReachVector Intelligence LLP — Privacy Policy</h3>
+                <h3 className="text-base font-bold text-slate-900">ReachVector Intelligence — Privacy Policy</h3>
                 <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
-                  <span>LLPIN: ADC-7323</span>
-                  <span>•</span>
                   <span>Effective Date: September 2026</span>
                 </div>
               </div>
@@ -145,7 +140,7 @@ export const TermsModal: React.FC<TermsModalProps> = ({
 
         {/* Footer */}
         <div className="px-6 py-3 border-t border-slate-100 bg-slate-50 flex items-center justify-between text-xs text-slate-500">
-          <span>ReachVector Intelligence LLP · LLPIN: ADC-7323</span>
+          <span>ReachVector Intelligence</span>
           <button
             type="button"
             onClick={onClose}

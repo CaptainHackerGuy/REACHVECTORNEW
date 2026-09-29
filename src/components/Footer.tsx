@@ -26,17 +26,22 @@ export const Footer: React.FC<FooterProps> = ({ onOpenTerms }) => {
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 mb-12">
           
-          {/* Brand & Corporate Overview */}
+          {/* Brand & Team Narrative */}
           <div className="lg:col-span-2 space-y-4">
             <a href="/" className="inline-block" aria-label="ReachVector Intelligence Home">
               <Logo size="md" theme="light" />
             </a>
 
-            <p className="text-slate-600 leading-relaxed text-xs sm:text-sm max-w-sm">
-              We're a technology and product company building focused tools — hardware and, increasingly, AI-powered software — engineered around a simple idea: solve one real problem completely, without asking people to manage more than they need to.
-            </p>
+            <div className="text-slate-600 leading-relaxed text-xs sm:text-sm max-w-sm space-y-3">
+              <p>
+                We're a small team, and we like it that way. Every product starts with us actually understanding the problem — talking to the people who'll use it, not just guessing at features.
+              </p>
+              <p>
+                PurrfectBackup came out of watching photographers run out of laptop battery in the field. Our next project, currently in development, comes from the same place — watching wildlife photographers spend hours manually sorting thousands of images after a single shoot.
+              </p>
+            </div>
 
-            <div className="space-y-2 text-xs text-slate-600 pt-1">
+            <div className="space-y-2 text-xs text-slate-600 pt-2">
               <div className="flex items-center gap-2">
                 <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 <a href="mailto:contact@reachvector.in" className="hover:text-slate-900 font-medium text-slate-800 transition-colors">
@@ -58,12 +63,6 @@ export const Footer: React.FC<FooterProps> = ({ onOpenTerms }) => {
                 <span className="leading-snug text-slate-600">
                   #38, Bellandur, Bengaluru, Karnataka 560103, India
                 </span>
-              </div>
-
-              {/* Legal Entity & Registration */}
-              <div className="pt-2 text-[11px] font-mono text-slate-500">
-                <div className="font-semibold text-slate-700">ReachVector Intelligence LLP</div>
-                <div className="text-slate-500">LLP Identification Number (LLPIN): <span className="font-bold text-slate-800">ADC-7323</span></div>
               </div>
             </div>
           </div>
@@ -191,30 +190,15 @@ export const Footer: React.FC<FooterProps> = ({ onOpenTerms }) => {
                   Privacy Policy
                 </button>
               </li>
-              <li>
-                <a
-                  href="https://purrfectbackup.com/return-refund-and-cancellation-policy/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 hover:text-slate-950 transition-colors"
-                >
-                  <span>Refund &amp; Return Policy</span>
-                  <ExternalLink className="w-3 h-3 text-slate-400" />
-                </a>
-              </li>
             </ul>
           </div>
 
         </div>
 
-        {/* Bottom Bar: Legal details and LLPIN */}
+        {/* Bottom Bar: Clean copyright */}
         <div className="pt-8 border-t border-slate-200 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-500">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-center md:text-left">
-            <span>© 2026 ReachVector Intelligence LLP. All rights reserved.</span>
-            <span className="hidden sm:inline text-slate-300">|</span>
-            <span className="font-mono text-slate-700 font-medium">
-              LLPIN: <strong className="text-slate-900">ADC-7323</strong> (Incorporated under the Limited Liability Partnership Act)
-            </span>
+            <span>© 2026 ReachVector Intelligence. All rights reserved.</span>
           </div>
 
           <button

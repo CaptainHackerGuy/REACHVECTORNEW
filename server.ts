@@ -25,33 +25,33 @@ interface InquiryRecord {
   inquiryType: string;
   message: string;
   status: 'sent' | 'queued' | 'failed';
+  customerEmailSent: boolean;
+  teamEmailSent: boolean;
   errorDetails?: string;
 }
 
 const inquiries: InquiryRecord[] = [];
 
-// Helper function to create nodemailer transporter
-function createMailTransporter(useFallbackPort = false) {
+// Helper function to create nodemailer transporter with optimized timeout
+function createMailTransporter(port = 465, secure = true) {
   const host = process.env.SMTP_HOST || 'mail.reachvector.in';
-  const port = useFallbackPort ? 587 : (Number(process.env.SMTP_PORT) || 465);
-  const secure = !useFallbackPort && port === 465;
   const user = process.env.SMTP_USER || 'contact@reachvector.in';
   const pass = process.env.SMTP_PASS || 'geYLyeO$4$boHNG';
 
   return nodemailer.createTransport({
     host,
     port,
-    secure, // true for 465, false for 587
+    secure, // true for 465 (SSL), false for 587 (STARTTLS)
     auth: {
       user,
       pass,
     },
     tls: {
-      rejectUnauthorized: false, // allow self-signed or domain mismatched certs if any
+      rejectUnauthorized: false,
     },
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
+    connectionTimeout: 4000,
+    greetingTimeout: 4000,
+    socketTimeout: 6000,
   });
 }
 
@@ -78,29 +78,100 @@ app.post('/api/contact', async (req, res) => {
     inquiryType: inquiryType || 'General Inquiry',
     message: message || '(No message content provided)',
     status: 'queued',
+    customerEmailSent: false,
+    teamEmailSent: false,
   };
 
   inquiries.push(record);
 
-  // Email payload for ReachVector Team
-  const adminSubject = `[Inquiry ${referenceCode}] ${record.inquiryType} - ${fullName}`;
-  const adminText = `
-New inquiry received on ReachVector Intelligence portal:
+  // 1. Email Payload for Customer Confirmation
+  const customerSubject = `We've received your inquiry — ReachVector Intelligence [Ref: ${referenceCode}]`;
+  const customerText = `Hello ${fullName},
+
+Thank you for reaching out to ReachVector Intelligence regarding "${record.inquiryType}".
+
+This email confirms that your message has been received by our engineering and product team. We will review your inquiry and get back to you promptly.
+
+Your Inquiry Details:
+--------------------------------------------------
+Reference ID : ${referenceCode}
+Time         : ${timestamp}
+Inquiry Type : ${record.inquiryType}
+Message      :
+${record.message}
+--------------------------------------------------
+
+If you have any further notes to add, simply reply to this email or write to contact@reachvector.in with reference code ${referenceCode}.
+
+Warm regards,
+ReachVector Intelligence Team
+https://reachvector.in
+contact@reachvector.in
+`;
+
+  const customerHtml = `
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+  <div style="border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 20px;">
+    <h2 style="margin: 0; color: #0f172a; font-size: 20px; font-weight: 700;">ReachVector Intelligence</h2>
+    <span style="font-family: monospace; font-size: 12px; color: #64748b;">Inquiry Reference: ${referenceCode}</span>
+  </div>
+
+  <p style="font-size: 15px; line-height: 1.6; color: #1e293b; margin-bottom: 16px;">
+    Hello <strong>${fullName}</strong>,
+  </p>
+
+  <p style="font-size: 14px; line-height: 1.6; color: #334155; margin-bottom: 20px;">
+    Thank you for reaching out to ReachVector Intelligence. This is a confirmation that your inquiry regarding <strong>"${record.inquiryType}"</strong> has been received by our team and will be looked into promptly.
+  </p>
+
+  <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+    <h4 style="margin: 0 0 10px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;">Summary of Your Submission</h4>
+    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+      <tr>
+        <td style="padding: 4px 0; color: #64748b; width: 120px;"><strong>Reference ID:</strong></td>
+        <td style="padding: 4px 0; color: #0f172a; font-family: monospace;">${referenceCode}</td>
+      </tr>
+      <tr>
+        <td style="padding: 4px 0; color: #64748b;"><strong>Topic / Issue:</strong></td>
+        <td style="padding: 4px 0; color: #0f172a;">${record.inquiryType}</td>
+      </tr>
+      <tr>
+        <td style="padding: 4px 0; color: #64748b; vertical-align: top;"><strong>Message:</strong></td>
+        <td style="padding: 4px 0; color: #0f172a; white-space: pre-wrap;">${record.message}</td>
+      </tr>
+    </table>
+  </div>
+
+  <p style="font-size: 13px; color: #64748b; margin-bottom: 24px;">
+    If you have any further details or materials to share, you can reply directly to this email or reach us at <a href="mailto:contact@reachvector.in" style="color: #0284c7; text-decoration: none;">contact@reachvector.in</a>.
+  </p>
+
+  <div style="border-top: 1px solid #e2e8f0; padding-top: 16px; font-size: 11px; color: #94a3b8;">
+    ReachVector Intelligence · Bengaluru, Karnataka, India<br />
+    <a href="https://reachvector.in" style="color: #64748b; text-decoration: none;">reachvector.in</a> · <a href="mailto:contact@reachvector.in" style="color: #64748b; text-decoration: none;">contact@reachvector.in</a>
+  </div>
+</div>
+`;
+
+  // 2. Email Payload for Internal Notification (to contact@reachvector.in)
+  const teamSubject = `[Inquiry ${referenceCode}] ${record.inquiryType} from ${fullName}`;
+  const teamText = `
+New Contact Submission on ReachVector Intelligence:
 --------------------------------------------------
 Reference ID : ${referenceCode}
 Time         : ${timestamp}
 Full Name    : ${fullName}
 Email        : ${email}
 Country      : ${record.country}
-Inquiry Type : ${record.inquiryType}
+Issue/Topic  : ${record.inquiryType}
 
 Message:
 ${record.message}
 --------------------------------------------------
-ReachVector Intelligence LLP · Corporate Portal
+ReachVector Intelligence Corporate Portal
 `;
 
-  const adminHtml = `
+  const teamHtml = `
 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
   <div style="border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 20px;">
     <h2 style="margin: 0; color: #0f172a; font-size: 20px; font-weight: 700;">ReachVector Intelligence — New Inquiry</h2>
@@ -109,100 +180,101 @@ ReachVector Intelligence LLP · Corporate Portal
 
   <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 14px;">
     <tr>
-      <td style="padding: 8px 0; color: #64748b; width: 130px;"><strong>Sender Name:</strong></td>
-      <td style="padding: 8px 0; color: #0f172a;">${fullName}</td>
+      <td style="padding: 8px 0; color: #64748b; width: 130px;"><strong>Full Name:</strong></td>
+      <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">${fullName}</td>
     </tr>
     <tr>
-      <td style="padding: 8px 0; color: #64748b;"><strong>Sender Email:</strong></td>
+      <td style="padding: 8px 0; color: #64748b;"><strong>Email:</strong></td>
       <td style="padding: 8px 0; color: #0f172a;"><a href="mailto:${email}" style="color: #0284c7; text-decoration: none;">${email}</a></td>
     </tr>
     <tr>
-      <td style="padding: 8px 0; color: #64748b;"><strong>Country / Territory:</strong></td>
+      <td style="padding: 8px 0; color: #64748b;"><strong>Country / Region:</strong></td>
       <td style="padding: 8px 0; color: #0f172a;">${record.country}</td>
     </tr>
     <tr>
-      <td style="padding: 8px 0; color: #64748b;"><strong>Inquiry Type:</strong></td>
+      <td style="padding: 8px 0; color: #64748b;"><strong>Issue / Topic:</strong></td>
       <td style="padding: 8px 0; color: #0f172a;"><span style="display: inline-block; background-color: #f1f5f9; padding: 3px 8px; border-radius: 6px; font-weight: 600;">${record.inquiryType}</span></td>
     </tr>
   </table>
 
   <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
-    <h4 style="margin: 0 0 8px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: #475569;">Message / Kit Details:</h4>
+    <h4 style="margin: 0 0 8px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: #475569;">Message:</h4>
     <p style="margin: 0; white-space: pre-wrap; font-size: 14px; line-height: 1.6; color: #1e293b;">${record.message}</p>
   </div>
 
   <div style="border-top: 1px solid #e2e8f0; padding-top: 16px; font-size: 11px; color: #94a3b8; font-family: monospace;">
-    ReachVector Intelligence LLP · LLPIN ADC-7323<br />
-    #38 Bellandur, Bengaluru, Karnataka, India - 560103
+    ReachVector Intelligence Portal · Internal Dispatch
   </div>
 </div>
 `;
 
-  let emailSent = false;
-  let attemptError = '';
+  // Function to dispatch emails via SMTP
+  async function dispatchSmtp() {
+    // Try port 465 (SSL) first, then port 587 (STARTTLS)
+    const configs = [
+      { port: 465, secure: true },
+      { port: 587, secure: false },
+    ];
 
-  // Attempt 1: Port 465 (SSL)
+    for (const cfg of configs) {
+      try {
+        const transporter = createMailTransporter(cfg.port, cfg.secure);
+
+        // Step 1: Send confirmation email to customer
+        await transporter.sendMail({
+          from: `"ReachVector Intelligence" <contact@reachvector.in>`,
+          to: email,
+          subject: customerSubject,
+          text: customerText,
+          html: customerHtml,
+        });
+        record.customerEmailSent = true;
+
+        // Step 2: Send detailed notification to contact@reachvector.in
+        await transporter.sendMail({
+          from: `"ReachVector Inquiries" <contact@reachvector.in>`,
+          to: 'contact@reachvector.in',
+          replyTo: `"${fullName}" <${email}>`,
+          subject: teamSubject,
+          text: teamText,
+          html: teamHtml,
+        });
+        record.teamEmailSent = true;
+        record.status = 'sent';
+        console.log(`[SMTP] Successfully dispatched both emails via port ${cfg.port}`);
+        return true;
+      } catch (err: any) {
+        console.warn(`[SMTP Port ${cfg.port}] Dispatch attempt failed: ${err.message}`);
+        record.errorDetails = err.message;
+      }
+    }
+    return false;
+  }
+
+  // Attempt SMTP dispatch with timeout protection
   try {
-    const transporter = createMailTransporter(false);
-    await transporter.sendMail({
-      from: `"ReachVector Portal" <contact@reachvector.in>`,
-      to: process.env.CONTACT_TO || 'contact@reachvector.in',
-      replyTo: `"${fullName}" <${email}>`,
-      subject: adminSubject,
-      text: adminText,
-      html: adminHtml,
-    });
-    emailSent = true;
-    record.status = 'sent';
+    const success = await Promise.race([
+      dispatchSmtp(),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 5000)),
+    ]);
+
+    if (!success) {
+      console.log(`[Server] Inquiry registered and queued: ${referenceCode}`);
+    }
   } catch (err: any) {
-    attemptError = err?.message || String(err);
-    console.warn(`[SMTP Port 465] Error dispatching mail: ${attemptError}`);
-
-    // Attempt 2: Fallback to Port 587 (STARTTLS)
-    try {
-      console.log('[SMTP] Attempting fallback on Port 587...');
-      const fallbackTransporter = createMailTransporter(true);
-      await fallbackTransporter.sendMail({
-        from: `"ReachVector Portal" <contact@reachvector.in>`,
-        to: process.env.CONTACT_TO || 'contact@reachvector.in',
-        replyTo: `"${fullName}" <${email}>`,
-        subject: adminSubject,
-        text: adminText,
-        html: adminHtml,
-      });
-      emailSent = true;
-      record.status = 'sent';
-    } catch (fallbackErr: any) {
-      const fbMsg = fallbackErr?.message || String(fallbackErr);
-      console.warn(`[SMTP Port 587] Fallback also failed: ${fbMsg}`);
-      record.status = 'queued';
-      record.errorDetails = fbMsg;
-    }
+    console.warn(`[Server] Error during mail dispatch:`, err);
   }
 
-  // Also send user confirmation email if first email succeeded
-  if (emailSent) {
-    try {
-      const userTransporter = createMailTransporter(false);
-      await userTransporter.sendMail({
-        from: `"ReachVector Intelligence" <contact@reachvector.in>`,
-        to: email,
-        subject: `Inquiry Received [${referenceCode}] — ReachVector Intelligence`,
-        text: `Hello ${fullName},\n\nThank you for reaching out to ReachVector Intelligence LLP regarding "${record.inquiryType}".\n\nYour inquiry reference number is: ${referenceCode}\n\nOur team has received your communication and will review your notes promptly.\n\nBest regards,\nReachVector Intelligence LLP\ncontact@reachvector.in`,
-      });
-    } catch (uErr) {
-      console.warn('[SMTP] Could not send receipt email to user:', uErr);
-    }
-  }
-
-  // Always return success with referenceCode to the user
+  // Return success response with reference code to the user
   return res.status(200).json({
     success: true,
     referenceCode,
-    emailSent,
-    message: emailSent
-      ? 'Inquiry received and transmitted to ReachVector team.'
-      : 'Inquiry registered and queued for the ReachVector team.',
+    emailSent: record.status === 'sent',
+    customerEmailSent: record.customerEmailSent,
+    teamEmailSent: record.teamEmailSent,
+    message: record.status === 'sent'
+      ? 'Your inquiry has been received and confirmed. An acknowledgment email has been sent.'
+      : 'Your inquiry has been registered with the ReachVector team.',
   });
 });
 
@@ -216,12 +288,20 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Inquiries status check endpoint (for diagnostics)
-app.get('/api/inquiries/count', (req, res) => {
+// Diagnostic inquiry review endpoint
+app.get('/api/inquiries', (req, res) => {
   res.json({
     total: inquiries.length,
-    sent: inquiries.filter((i) => i.status === 'sent').length,
-    queued: inquiries.filter((i) => i.status === 'queued').length,
+    inquiries: inquiries.map(i => ({
+      id: i.id,
+      timestamp: i.timestamp,
+      fullName: i.fullName,
+      email: i.email,
+      inquiryType: i.inquiryType,
+      status: i.status,
+      customerEmailSent: i.customerEmailSent,
+      teamEmailSent: i.teamEmailSent,
+    })),
   });
 });
 

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { COUNTRIES } from '../data/countries.ts';
-import { Mail, MapPin, Send, CheckCircle2, Copy, Check, Clock, ShieldCheck, Building2 } from 'lucide-react';
+import { Mail, MapPin, Send, CheckCircle2, Copy, Check, Clock, ShieldCheck } from 'lucide-react';
 
 export const CompanyContact: React.FC = () => {
   const [fullName, setFullName] = useState('');
@@ -97,7 +97,7 @@ export const CompanyContact: React.FC = () => {
             Contact &amp; Inquiries
           </h2>
           <p className="text-base text-slate-600 leading-relaxed">
-            Reach out to ReachVector Intelligence LLP for corporate, engineering, and partner inquiries. For direct correspondence, email us at <strong className="text-slate-900">contact@reachvector.in</strong>.
+            Reach out to ReachVector Intelligence for inquiries, questions, or collaborations. For direct correspondence, email us at <strong className="text-slate-900">contact@reachvector.in</strong>.
           </p>
         </div>
 
@@ -106,25 +106,20 @@ export const CompanyContact: React.FC = () => {
           {/* Left Column: Direct Company Information */}
           <div className="lg:col-span-5 space-y-6">
             <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-7 shadow-xs space-y-5">
-              <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">
-                    ReachVector Intelligence LLP
-                  </h3>
-                  <span className="text-[11px] font-mono text-slate-500">
-                    LLPIN: ADC-7323
-                  </span>
-                </div>
-                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-700">
-                  <Building2 className="w-4 h-4" />
-                </div>
+              <div className="border-b border-slate-100 pb-3">
+                <h3 className="text-base font-bold text-slate-900">
+                  Direct Inquiries
+                </h3>
+                <span className="text-xs text-slate-500">
+                  ReachVector Intelligence Team
+                </span>
               </div>
 
               <div className="space-y-4 text-xs sm:text-sm">
                 <div className="flex items-start gap-3">
                   <Mail className="w-4 h-4 text-slate-600 shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <span className="text-slate-500 text-xs block">Corporate Email</span>
+                    <span className="text-slate-500 text-xs block">Email Address</span>
                     <div className="flex items-center gap-2">
                       <a href="mailto:contact@reachvector.in" className="font-semibold text-slate-900 hover:text-cyan-700 transition-colors">
                         contact@reachvector.in
@@ -132,7 +127,7 @@ export const CompanyContact: React.FC = () => {
                       <button
                         type="button"
                         onClick={handleCopyEmail}
-                        className="p-1 text-slate-400 hover:text-slate-700 transition-colors"
+                        className="p-1 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
                         title="Copy email"
                         aria-label="Copy email"
                       >
@@ -145,7 +140,7 @@ export const CompanyContact: React.FC = () => {
                 <div className="flex items-start gap-3">
                   <MapPin className="w-4 h-4 text-slate-600 shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <span className="text-slate-500 text-xs block">Registered Address</span>
+                    <span className="text-slate-500 text-xs block">Location</span>
                     <div className="flex items-start justify-between gap-2">
                       <span className="font-medium text-slate-800 leading-snug">
                         #38, Bellandur<br />
@@ -155,7 +150,7 @@ export const CompanyContact: React.FC = () => {
                       <button
                         type="button"
                         onClick={handleCopyAddress}
-                        className="p-1 text-slate-400 hover:text-slate-700 transition-colors mt-0.5 shrink-0"
+                        className="p-1 text-slate-400 hover:text-slate-700 transition-colors mt-0.5 shrink-0 cursor-pointer"
                         title="Copy address"
                         aria-label="Copy address"
                       >
@@ -184,10 +179,6 @@ export const CompanyContact: React.FC = () => {
                     </span>
                   </div>
                 </div>
-              </div>
-
-              <div className="pt-3 border-t border-slate-100 text-[11px] text-slate-500 leading-relaxed font-mono">
-                Statutory ID: ReachVector Intelligence LLP · LLPIN ADC-7323
               </div>
             </div>
           </div>

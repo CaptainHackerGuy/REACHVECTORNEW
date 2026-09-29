@@ -53,7 +53,7 @@ export const PartnershipSection: React.FC = () => {
           </h2>
 
           <p className="text-base sm:text-lg text-slate-600 leading-relaxed">
-            ReachVector Intelligence LLP is actively open to strategic partnerships. Whether you are an international distributor, camera retailer, or hardware partner, we welcome collaborations that align with our focus on offline-first, autonomous computing.
+            ReachVector Intelligence is actively open to strategic partnerships. Whether you are an international distributor, camera retailer, or hardware partner, we welcome collaborations that align with our focus on offline-first, autonomous computing.
           </p>
         </div>
 
