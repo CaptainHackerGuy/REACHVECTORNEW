@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { COUNTRIES } from '../data/countries.ts';
-import { Mail, MapPin, Send, CheckCircle2, Copy, Check } from 'lucide-react';
+import { Mail, MapPin, Send, CheckCircle2, Copy, Check, AlertCircle } from 'lucide-react';
 
 export const CompanyContact: React.FC = () => {
   const [fullName, setFullName] = useState('');
@@ -16,35 +16,26 @@ export const CompanyContact: React.FC = () => {
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
-  const [deliveryStatus, setDeliveryStatus] = useState<{
-    customerSent?: boolean;
-    teamSent?: boolean;
-    error?: string;
-    logs?: string[];
-  } | null>(null);
-  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (honeypot) return; // bot trap
 
     if (!email || !email.includes('@')) {
-      setErrorMessage('Please enter a valid email address.');
+      setStatusMessage({ type: 'error', text: 'Please enter a valid email address.' });
       return;
     }
 
-    setErrorMessage('');
+    if (!fullName.trim()) {
+      setStatusMessage({ type: 'error', text: 'Please enter your full name.' });
+      return;
+    }
+
+    setStatusMessage(null);
     setIsSubmitting(true);
 
     const generatedCode = `RV-${Math.random().toString(36).substring(2, 7).toUpperCase()}-2026`;
-
-    console.group('📨 [ReachVector] Submitting Inquiry');
-    console.log('Timestamp:', new Date().toISOString());
-    console.log('Reference Code:', generatedCode);
-    console.log('Sender:', fullName, `<${email}>`);
-    console.log('Topic:', inquiryType);
-    console.log('Destination:', '/api/contact');
 
     try {
       const res = await fetch('/api/contact', {
@@ -60,44 +51,23 @@ export const CompanyContact: React.FC = () => {
         }),
       });
 
-      console.log('HTTP Status:', res.status, res.statusText);
-      const data = await res.json().catch((parseErr) => {
-        console.warn('Could not parse response as JSON:', parseErr);
-        return null;
-      });
+      const data = await res.json().catch(() => null);
 
-      console.log('API Response:', data);
-
-      if (data?.logs && Array.isArray(data.logs)) {
-        console.group('📋 [SMTP Server Logs]');
-        data.logs.forEach((line: string) => console.log(line));
-        console.groupEnd();
+      if (res.ok && data?.success) {
+        setReservationCode(data.referenceCode || generatedCode);
+        setSubmitted(true);
+      } else {
+        setStatusMessage({
+          type: 'error',
+          text: data?.error || 'Unable to send message at this time. Please try again or write directly to contact@reachvector.in.',
+        });
       }
-
-      if (data?.error) {
-        console.warn('⚠️ SMTP Result Note:', data.error);
-      }
-
-      setDeliveryStatus({
-        customerSent: data?.customerEmailSent,
-        teamSent: data?.teamEmailSent,
-        error: data?.error,
-        logs: data?.logs,
+    } catch {
+      setStatusMessage({
+        type: 'error',
+        text: 'Network error connecting to the server. Please check your connection or email contact@reachvector.in directly.',
       });
-
-      setReservationCode(data?.referenceCode || generatedCode);
-      setSubmitted(true);
-    } catch (err: any) {
-      console.error('❌ Network error contacting /api/contact:', err);
-      setDeliveryStatus({
-        customerSent: false,
-        teamSent: false,
-        error: err?.message || 'Network unreachable',
-      });
-      setReservationCode(generatedCode);
-      setSubmitted(true);
     } finally {
-      console.groupEnd();
       setIsSubmitting(false);
     }
   };
@@ -118,6 +88,12 @@ export const CompanyContact: React.FC = () => {
     navigator.clipboard.writeText('38 Bellandur, Bengaluru, Karnataka, India - 560103');
     setCopiedAddress(true);
     setTimeout(() => setCopiedAddress(false), 2000);
+  };
+
+  const handleReset = () => {
+    setSubmitted(false);
+    setStatusMessage(null);
+    setMessage('');
   };
 
   return (
@@ -212,10 +188,10 @@ export const CompanyContact: React.FC = () => {
                 </div>
                 <h3 className="text-2xl font-bold text-slate-900 mb-2">Message Sent</h3>
                 <p className="text-sm text-slate-600 max-w-md mb-6">
-                  Thank you, <strong className="text-slate-900">{fullName || 'Inquirer'}</strong>. Our team has received your communication regarding <strong className="text-slate-900">{inquiryType}</strong>.
+                  Thank you, <strong className="text-slate-900">{fullName || 'Inquirer'}</strong>. Your message has been sent successfully to the ReachVector team.
                 </p>
 
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 w-full max-w-sm mb-4 text-left">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 w-full max-w-sm mb-6 text-left">
                   <div className="text-[11px] font-mono text-slate-500 uppercase mb-1">Inquiry Reference Number</div>
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-mono text-sm font-bold text-slate-900">{reservationCode}</span>
@@ -230,60 +206,12 @@ export const CompanyContact: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Email Delivery Diagnostics Box */}
-                <div className="w-full max-w-sm mb-6 text-left space-y-2">
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1.5 font-mono">
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500">Customer Receipt:</span>
-                      <span className={deliveryStatus?.customerSent ? 'text-emerald-700 font-bold' : 'text-slate-600'}>
-                        {deliveryStatus?.customerSent ? 'Dispatched' : 'Queued / Host Notice'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500">Team Delivery:</span>
-                      <span className={deliveryStatus?.teamSent ? 'text-emerald-700 font-bold' : 'text-slate-600'}>
-                        {deliveryStatus?.teamSent ? 'Delivered' : 'Queued for Team'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Direct Mail Client Fallback */}
-                  <div className="flex flex-col gap-2 pt-1">
-                    <a
-                      href={`mailto:contact@reachvector.in?subject=${encodeURIComponent(`[${reservationCode}] ${inquiryType} - ${fullName}`)}&body=${encodeURIComponent(`Inquiry Reference: ${reservationCode}\nName: ${fullName}\nEmail: ${email}\nCountry: ${country}\nTopic: ${inquiryType}\n\n${message}`)}`}
-                      className="w-full py-2 px-3 rounded-lg border border-slate-200 hover:border-slate-300 bg-white text-slate-700 hover:text-slate-950 text-xs font-semibold text-center transition-colors flex items-center justify-center gap-1.5 shadow-2xs"
-                    >
-                      <Mail className="w-3.5 h-3.5" />
-                      <span>Open Pre-filled Email in Mail App</span>
-                    </a>
-
-                    {deliveryStatus?.logs && deliveryStatus.logs.length > 0 && (
-                      <div>
-                        <button
-                          type="button"
-                          onClick={() => setShowDiagnostics(!showDiagnostics)}
-                          className="text-[11px] text-slate-500 hover:text-slate-800 underline block mx-auto cursor-pointer"
-                        >
-                          {showDiagnostics ? 'Hide Server Console Logs' : 'View Server Console Logs'}
-                        </button>
-                        {showDiagnostics && (
-                          <div className="mt-2 p-3 bg-slate-900 text-slate-200 rounded-lg text-[10px] font-mono overflow-x-auto max-h-40 text-left space-y-1">
-                            {deliveryStatus.logs.map((logLine, idx) => (
-                              <div key={idx} className="leading-tight">{logLine}</div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
                 <button
                   type="button"
-                  onClick={() => setSubmitted(false)}
-                  className="text-xs font-semibold text-slate-600 hover:text-slate-900 underline transition-colors"
+                  onClick={handleReset}
+                  className="text-xs font-semibold text-slate-600 hover:text-slate-900 underline transition-colors cursor-pointer"
                 >
-                  Send another inquiry
+                  Send another message
                 </button>
               </motion.div>
             ) : (
@@ -301,9 +229,20 @@ export const CompanyContact: React.FC = () => {
                   />
                 </div>
 
-                {errorMessage && (
-                  <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs">
-                    {errorMessage}
+                {statusMessage && (
+                  <div
+                    className={`p-3.5 rounded-xl border text-xs flex items-start gap-2.5 ${
+                      statusMessage.type === 'error'
+                        ? 'bg-rose-50 border-rose-200 text-rose-800'
+                        : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    }`}
+                  >
+                    {statusMessage.type === 'error' ? (
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    )}
+                    <span className="leading-relaxed">{statusMessage.text}</span>
                   </div>
                 )}
 
@@ -315,16 +254,17 @@ export const CompanyContact: React.FC = () => {
                     <input
                       type="text"
                       id="fName"
+                      required
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      placeholder="Alex Morgan"
+                      placeholder="e.g. Eleanor Vance"
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-900 focus:bg-white transition-all"
                     />
                   </div>
 
                   <div>
                     <label htmlFor="fEmail" className="block text-xs font-semibold text-slate-700 mb-1.5">
-                      Email Address <span className="text-red-500">*</span>
+                      Email Address
                     </label>
                     <input
                       type="email"
@@ -332,7 +272,7 @@ export const CompanyContact: React.FC = () => {
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="contact@reachvector.in"
+                      placeholder="e.g. name@domain.com"
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-900 focus:bg-white transition-all"
                     />
                   </div>
@@ -341,26 +281,23 @@ export const CompanyContact: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="fCountry" className="block text-xs font-semibold text-slate-700 mb-1.5">
-                      Country / Region <span className="text-red-500">*</span>
+                      Country / Region
                     </label>
                     <select
                       id="fCountry"
-                      required
                       value={country}
                       onChange={(e) => setCountry(e.target.value)}
                       className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:border-slate-900 focus:bg-white transition-all"
                     >
                       {COUNTRIES.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
+                        <option key={c} value={c}>{c}</option>
                       ))}
                     </select>
                   </div>
 
                   <div>
                     <label htmlFor="fInquiry" className="block text-xs font-semibold text-slate-700 mb-1.5">
-                      Subject
+                      Inquiry Topic
                     </label>
                     <select
                       id="fInquiry"
@@ -399,7 +336,7 @@ export const CompanyContact: React.FC = () => {
                   <button
                     type="submit"
                     disabled={isSubmitting || !email}
-                    className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs shadow-xs transition-all disabled:opacity-50 active:scale-95"
+                    className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs shadow-xs transition-all disabled:opacity-50 active:scale-95 cursor-pointer"
                   >
                     {isSubmitting ? (
                       <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
