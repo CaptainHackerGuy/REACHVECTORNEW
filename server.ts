@@ -208,9 +208,69 @@ ReachVector Intelligence Corporate Portal
 </div>
 `;
 
-  // Function to dispatch emails via SMTP
+  // Function to dispatch emails via Resend HTTPS API (Primary)
+  async function dispatchResend() {
+    if (!process.env.RESEND_API_KEY) return false;
+    try {
+      console.log('🚀 [Server Resend] Dispatching via Resend API (HTTPS)...');
+      const fromSender = 'ReachVector Intelligence <contact@reachvector.in>';
+
+      // 1. Customer confirmation
+      const cRes = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.RESEND_API_KEY.trim()}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: fromSender,
+          to: [email],
+          reply_to: 'contact@reachvector.in',
+          subject: customerSubject,
+          html: customerHtml,
+          text: customerText,
+        }),
+      });
+
+      if (cRes.ok) {
+        record.customerEmailSent = true;
+        console.log('✅ [Server Resend] Customer confirmation sent');
+      }
+
+      // 2. Team notification
+      const tRes = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.RESEND_API_KEY.trim()}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: 'ReachVector Portal <contact@reachvector.in>',
+          to: ['contact@reachvector.in'],
+          reply_to: `${fullName} <${email}>`,
+          subject: teamSubject,
+          html: teamHtml,
+          text: teamText,
+        }),
+      });
+
+      if (tRes.ok) {
+        record.teamEmailSent = true;
+        console.log('✅ [Server Resend] Team notification sent');
+      }
+
+      if (record.customerEmailSent || record.teamEmailSent) {
+        record.status = 'sent';
+        return true;
+      }
+    } catch (resendErr: any) {
+      console.warn('❌ [Server Resend] Error:', resendErr?.message);
+    }
+    return false;
+  }
+
+  // Function to dispatch emails via SMTP (Fallback)
   async function dispatchSmtp() {
-    // Try port 465 (SSL) first, then port 587 (STARTTLS)
     const configs = [
       { port: 465, secure: true },
       { port: 587, secure: false },
@@ -220,26 +280,29 @@ ReachVector Intelligence Corporate Portal
       try {
         const transporter = createMailTransporter(cfg.port, cfg.secure);
 
-        // Step 1: Send confirmation email to customer
-        await transporter.sendMail({
-          from: `"ReachVector Intelligence" <contact@reachvector.in>`,
-          to: email,
-          subject: customerSubject,
-          text: customerText,
-          html: customerHtml,
-        });
-        record.customerEmailSent = true;
+        if (!record.customerEmailSent) {
+          await transporter.sendMail({
+            from: `"ReachVector Intelligence" <contact@reachvector.in>`,
+            to: email,
+            subject: customerSubject,
+            text: customerText,
+            html: customerHtml,
+          });
+          record.customerEmailSent = true;
+        }
 
-        // Step 2: Send detailed notification to contact@reachvector.in
-        await transporter.sendMail({
-          from: `"ReachVector Inquiries" <contact@reachvector.in>`,
-          to: 'contact@reachvector.in',
-          replyTo: `"${fullName}" <${email}>`,
-          subject: teamSubject,
-          text: teamText,
-          html: teamHtml,
-        });
-        record.teamEmailSent = true;
+        if (!record.teamEmailSent) {
+          await transporter.sendMail({
+            from: `"ReachVector Inquiries" <contact@reachvector.in>`,
+            to: 'contact@reachvector.in',
+            replyTo: `"${fullName}" <${email}>`,
+            subject: teamSubject,
+            text: teamText,
+            html: teamHtml,
+          });
+          record.teamEmailSent = true;
+        }
+
         record.status = 'sent';
         console.log(`[SMTP] Successfully dispatched both emails via port ${cfg.port}`);
         return true;
@@ -251,21 +314,24 @@ ReachVector Intelligence Corporate Portal
     return false;
   }
 
-  // Attempt SMTP dispatch with timeout protection
+  // Attempt dispatch: Try Resend first, then fallback to SMTP
   try {
-    const success = await Promise.race([
-      dispatchSmtp(),
-      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 5000)),
-    ]);
+    let sent = await dispatchResend();
+    if (!sent) {
+      sent = await Promise.race([
+        dispatchSmtp(),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 4500)),
+      ]);
+    }
 
-    if (!success) {
-      console.log(`[Server] Inquiry registered and queued: ${referenceCode}`);
+    if (!sent) {
+      console.log(`[Server] Inquiry registered: ${referenceCode}`);
     }
   } catch (err: any) {
     console.warn(`[Server] Error during mail dispatch:`, err);
   }
 
-  // Return success response with reference code to the user
+  // Return response
   return res.status(200).json({
     success: true,
     referenceCode,

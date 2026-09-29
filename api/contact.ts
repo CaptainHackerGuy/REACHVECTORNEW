@@ -1,6 +1,6 @@
 import nodemailer from 'nodemailer';
 
-// Helper to create mail transporter with fast timeout so it never hangs serverless lambdas
+// Helper to create mail transporter with fast timeout for SMTP fallback
 function createTransporter(port: number, secure: boolean) {
   const host = process.env.SMTP_HOST || 'mail.reachvector.in';
   const user = process.env.SMTP_USER || 'contact@reachvector.in';
@@ -14,9 +14,9 @@ function createTransporter(port: number, secure: boolean) {
     tls: { rejectUnauthorized: false },
     // @ts-ignore
     family: 4,
-    connectionTimeout: 3500,
-    greetingTimeout: 3500,
-    socketTimeout: 4000,
+    connectionTimeout: 4000,
+    greetingTimeout: 4000,
+    socketTimeout: 5000,
   });
 }
 
@@ -35,6 +35,8 @@ export default async function handler(req: any, res: any) {
       status: 'ok',
       endpoint: '/api/contact',
       service: 'ReachVector Intelligence Contact Service',
+      hasResendConfigured: Boolean(process.env.RESEND_API_KEY),
+      senderDomain: 'reachvector.in',
       time: new Date().toISOString(),
     });
   }
@@ -67,7 +69,7 @@ export default async function handler(req: any, res: any) {
   const safeInquiry = inquiryType || 'General Company Inquiry';
   const safeMessage = message || '(No message content provided)';
 
-  console.log(`[Contact Submission] Ref: ${referenceCode} | From: ${fullName} <${email}> | Type: ${safeInquiry}`);
+  console.log(`📨 [ReachVector Contact] Ref: ${referenceCode} | From: ${fullName} <${email}> | Type: ${safeInquiry}`);
 
   // 1. Email to Customer
   const customerSubject = `We've received your inquiry — ReachVector Intelligence [Ref: ${referenceCode}]`;
@@ -93,7 +95,7 @@ contact@reachvector.in
 `;
 
   const customerHtml = `
-<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
   <div style="border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 20px;">
     <h2 style="margin: 0; color: #0f172a; font-size: 20px; font-weight: 700;">ReachVector Intelligence</h2>
     <span style="font-family: monospace; font-size: 12px; color: #64748b;">Inquiry Reference: ${referenceCode}</span>
@@ -110,28 +112,28 @@ contact@reachvector.in
   <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
     <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
       <tr>
-        <td style="padding: 4px 0; color: #64748b; width: 120px;"><strong>Reference ID:</strong></td>
-        <td style="padding: 4px 0; color: #0f172a; font-family: monospace;">${referenceCode}</td>
+        <td style="padding: 5px 0; color: #64748b; width: 120px;"><strong>Reference ID:</strong></td>
+        <td style="padding: 5px 0; color: #0f172a; font-family: monospace; font-weight: 600;">${referenceCode}</td>
       </tr>
       <tr>
-        <td style="padding: 4px 0; color: #64748b;"><strong>Topic / Issue:</strong></td>
-        <td style="padding: 4px 0; color: #0f172a;">${safeInquiry}</td>
+        <td style="padding: 5px 0; color: #64748b;"><strong>Topic / Issue:</strong></td>
+        <td style="padding: 5px 0; color: #0f172a;">${safeInquiry}</td>
       </tr>
       <tr>
-        <td style="padding: 4px 0; color: #64748b; vertical-align: top;"><strong>Message:</strong></td>
-        <td style="padding: 4px 0; color: #0f172a; white-space: pre-wrap;">${safeMessage}</td>
+        <td style="padding: 5px 0; color: #64748b; vertical-align: top;"><strong>Message:</strong></td>
+        <td style="padding: 5px 0; color: #0f172a; white-space: pre-wrap;">${safeMessage}</td>
       </tr>
     </table>
   </div>
 
-  <div style="border-top: 1px solid #e2e8f0; padding-top: 16px; font-size: 11px; color: #94a3b8;">
+  <div style="border-top: 1px solid #e2e8f0; padding-top: 16px; font-size: 11px; color: #94a3b8; line-height: 1.5;">
     ReachVector Intelligence · Bengaluru, Karnataka, India<br />
     <a href="https://reachvector.in" style="color: #64748b; text-decoration: none;">reachvector.in</a> · <a href="mailto:contact@reachvector.in" style="color: #64748b; text-decoration: none;">contact@reachvector.in</a>
   </div>
 </div>
 `;
 
-  // 2. Email to Team
+  // 2. Email to Team (contact@reachvector.in)
   const teamSubject = `[Inquiry ${referenceCode}] ${safeInquiry} from ${fullName}`;
   const teamText = `
 New Contact Submission on ReachVector Intelligence:
@@ -149,7 +151,7 @@ ${safeMessage}
 `;
 
   const teamHtml = `
-<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
   <div style="border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 20px;">
     <h2 style="margin: 0; color: #0f172a; font-size: 20px; font-weight: 700;">ReachVector Intelligence — New Inquiry</h2>
     <span style="font-family: monospace; font-size: 12px; color: #64748b;">Reference: ${referenceCode}</span>
@@ -178,57 +180,89 @@ ${safeMessage}
     <h4 style="margin: 0 0 8px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: #475569;">Message:</h4>
     <p style="margin: 0; white-space: pre-wrap; font-size: 14px; line-height: 1.6; color: #1e293b;">${safeMessage}</p>
   </div>
+
+  <div style="border-top: 1px solid #e2e8f0; padding-top: 16px; font-size: 11px; color: #94a3b8;">
+    Reply directly to this email to contact ${fullName} (${email}).
+  </div>
 </div>
 `;
 
   let customerSent = false;
   let teamSent = false;
+  let customerMessageId = '';
+  let teamMessageId = '';
+  let failureReason = '';
 
-  // Method A: If RESEND_API_KEY is configured in Vercel, send via Resend HTTPS (100% reliable)
+  // PRIMARY PROVIDER: Resend API (HTTPS Port 443 — Verified domain reachvector.in)
   if (process.env.RESEND_API_KEY) {
-    try {
-      console.log('Sending via Resend API (HTTPS)...');
-      const fromAddress = process.env.RESEND_FROM || 'contact@reachvector.in';
+    console.log('🚀 [Resend] Dispatching emails via Resend HTTPS API using verified domain reachvector.in...');
+    const fromSender = 'ReachVector Intelligence <contact@reachvector.in>';
 
-      // Send to customer
-      await fetch('https://api.resend.com/emails', {
+    try {
+      // 1. Send Customer Receipt
+      const cRes = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+          'Authorization': `Bearer ${process.env.RESEND_API_KEY.trim()}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: `ReachVector Intelligence <${fromAddress}>`,
+          from: fromSender,
           to: [email],
+          reply_to: 'contact@reachvector.in',
           subject: customerSubject,
           html: customerHtml,
+          text: customerText,
         }),
       });
-      customerSent = true;
 
-      // Send to team
-      await fetch('https://api.resend.com/emails', {
+      if (cRes.ok) {
+        const cData = await cRes.json().catch(() => ({}));
+        customerSent = true;
+        customerMessageId = cData?.id || 'delivered';
+        console.log(`✅ [Resend] Customer confirmation sent! ID: ${customerMessageId}`);
+      } else {
+        const cErr = await cRes.text();
+        console.error(`❌ [Resend] Customer email failed (HTTP ${cRes.status}):`, cErr);
+        failureReason = `Resend: ${cErr}`;
+      }
+
+      // 2. Send Team Delivery to contact@reachvector.in
+      const tRes = await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+          'Authorization': `Bearer ${process.env.RESEND_API_KEY.trim()}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: `ReachVector Inquiries <${fromAddress}>`,
+          from: 'ReachVector Portal <contact@reachvector.in>',
           to: ['contact@reachvector.in'],
-          reply_to: email,
+          reply_to: `${fullName} <${email}>`,
           subject: teamSubject,
           html: teamHtml,
+          text: teamText,
         }),
       });
-      teamSent = true;
-    } catch (resendErr) {
-      console.warn('Resend API attempt failed:', resendErr);
+
+      if (tRes.ok) {
+        const tData = await tRes.json().catch(() => ({}));
+        teamSent = true;
+        teamMessageId = tData?.id || 'delivered';
+        console.log(`✅ [Resend] Team inquiry delivered! ID: ${teamMessageId}`);
+      } else {
+        const tErr = await tRes.text();
+        console.error(`❌ [Resend] Team email failed (HTTP ${tRes.status}):`, tErr);
+        if (!failureReason) failureReason = `Resend: ${tErr}`;
+      }
+    } catch (resendErr: any) {
+      console.error('❌ [Resend] Exception calling Resend API:', resendErr);
+      failureReason = resendErr.message || 'Resend network error';
     }
   }
 
-  // Method B: Attempt SMTP if not sent via API
+  // SECONDARY PROVIDER: Direct SMTP Fallback (Port 465 / 587)
   if (!customerSent || !teamSent) {
+    console.log('🔄 Attempting SMTP fallback...');
     const configs = [
       { port: 465, secure: true },
       { port: 587, secure: false },
@@ -239,7 +273,7 @@ ${safeMessage}
         const transporter = createTransporter(cfg.port, cfg.secure);
 
         if (!customerSent) {
-          await transporter.sendMail({
+          const cResult = await transporter.sendMail({
             from: `"ReachVector Intelligence" <contact@reachvector.in>`,
             to: email,
             subject: customerSubject,
@@ -247,10 +281,12 @@ ${safeMessage}
             html: customerHtml,
           });
           customerSent = true;
+          customerMessageId = cResult.messageId;
+          console.log(`✅ [SMTP] Customer email sent via port ${cfg.port}`);
         }
 
         if (!teamSent) {
-          await transporter.sendMail({
+          const tResult = await transporter.sendMail({
             from: `"ReachVector Inquiries" <contact@reachvector.in>`,
             to: 'contact@reachvector.in',
             replyTo: `"${fullName}" <${email}>`,
@@ -259,21 +295,37 @@ ${safeMessage}
             html: teamHtml,
           });
           teamSent = true;
+          teamMessageId = tResult.messageId;
+          console.log(`✅ [SMTP] Team email sent via port ${cfg.port}`);
         }
 
         break;
       } catch (smtpErr: any) {
-        console.warn(`SMTP port ${cfg.port} notice:`, smtpErr?.message);
+        console.warn(`[SMTP Port ${cfg.port}] ${smtpErr?.message}`);
+        if (!failureReason) failureReason = smtpErr?.message || 'SMTP timeout';
       }
     }
   }
 
-  // Always return success to client so user gets their reference code
-  return res.status(200).json({
-    success: true,
+  // If at least one email was sent or Resend succeeded
+  if (customerSent || teamSent) {
+    return res.status(200).json({
+      success: true,
+      referenceCode,
+      customerEmailSent: customerSent,
+      teamEmailSent: teamSent,
+      customerMessageId,
+      teamMessageId,
+      message: 'Your inquiry has been successfully sent to the ReachVector team.',
+    });
+  }
+
+  // If sending failed completely
+  return res.status(502).json({
+    success: false,
     referenceCode,
-    customerEmailSent: customerSent,
-    teamEmailSent: teamSent,
-    message: 'Your inquiry has been registered with the ReachVector team.',
+    customerEmailSent: false,
+    teamEmailSent: false,
+    error: `Unable to dispatch emails: ${failureReason || 'Connection timeout'}.`,
   });
 }
