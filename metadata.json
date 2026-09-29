@@ -1,0 +1,6 @@
+{
+  "name": "ReachVector Intelligence | Intelligent Field Hardware & PurrfectBackup",
+  "description": "ReachVector Intelligence engineers resilient, laptop-free hardware for professional creators. Discover PurrfectBackup, the ultra-fast field backup device for photographers and filmmakers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
