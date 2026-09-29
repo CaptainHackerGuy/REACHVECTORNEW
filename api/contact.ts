@@ -1,6 +1,10 @@
 import nodemailer from 'nodemailer';
+import dns from 'dns';
+import { promisify } from 'util';
 
-// Helper to create mail transporter with IPv4 and robust TLS settings for Vercel/serverless
+const resolve4Async = promisify(dns.resolve4);
+
+// Helper to create mail transporter
 function createTransporter(port: number, secure: boolean) {
   const host = process.env.SMTP_HOST || 'mail.reachvector.in';
   const user = process.env.SMTP_USER || 'contact@reachvector.in';
@@ -17,12 +21,11 @@ function createTransporter(port: number, secure: boolean) {
     tls: {
       rejectUnauthorized: false,
     },
-    // Force IPv4 in AWS Lambda/Vercel to prevent IPv6 DNS hang
-    // @ts-ignore
+    // @ts-ignore Force IPv4 in AWS Lambda/Vercel to prevent IPv6 DNS hang
     family: 4,
-    connectionTimeout: 8000,
-    greetingTimeout: 8000,
-    socketTimeout: 10000,
+    connectionTimeout: 7000,
+    greetingTimeout: 7000,
+    socketTimeout: 9000,
   });
 }
 
@@ -40,12 +43,60 @@ export default async function handler(req: any, res: any) {
     return res.status(200).end();
   }
 
+  // Active GET diagnostic probe to test SMTP connectivity directly from browser or Vercel
   if (req.method === 'GET') {
+    const diagLogs: string[] = [];
+    const host = process.env.SMTP_HOST || 'mail.reachvector.in';
+    const user = process.env.SMTP_USER || 'contact@reachvector.in';
+
+    diagLogs.push(`[DNS] Resolving ${host}...`);
+    let ip = 'unknown';
+    try {
+      const addresses = await resolve4Async(host);
+      ip = addresses.join(', ');
+      diagLogs.push(`[DNS] Resolved to IP(s): ${ip}`);
+    } catch (e: any) {
+      diagLogs.push(`[DNS] Resolution error: ${e.message}`);
+    }
+
+    // Probe 465
+    diagLogs.push(`[SMTP 465] Testing connection to ${host}:465 (SSL)...`);
+    let port465Success = false;
+    let port465Error = '';
+    try {
+      const t465 = createTransporter(465, true);
+      await t465.verify();
+      port465Success = true;
+      diagLogs.push(`[SMTP 465] ✅ Connection & Authentication Verified!`);
+    } catch (e: any) {
+      port465Error = e.message || String(e);
+      diagLogs.push(`[SMTP 465] ❌ Error: ${port465Error}`);
+    }
+
+    // Probe 587
+    diagLogs.push(`[SMTP 587] Testing connection to ${host}:587 (STARTTLS)...`);
+    let port587Success = false;
+    let port587Error = '';
+    try {
+      const t587 = createTransporter(587, false);
+      await t587.verify();
+      port587Success = true;
+      diagLogs.push(`[SMTP 587] ✅ Connection & Authentication Verified!`);
+    } catch (e: any) {
+      port587Error = e.message || String(e);
+      diagLogs.push(`[SMTP 587] ❌ Error: ${port587Error}`);
+    }
+
     return res.status(200).json({
-      status: 'ok',
-      endpoint: 'Vercel Serverless Contact API',
-      smtpHost: process.env.SMTP_HOST || 'mail.reachvector.in',
-      time: new Date().toISOString(),
+      status: 'diagnostic_report',
+      timestamp: new Date().toISOString(),
+      smtpHost: host,
+      smtpUser: user,
+      resolvedIp: ip,
+      port465: { status: port465Success ? 'CONNECTED' : 'FAILED', error: port465Error || null },
+      port587: { status: port587Success ? 'CONNECTED' : 'FAILED', error: port587Error || null },
+      logs: diagLogs,
+      environment: process.env.VERCEL ? 'Vercel Serverless' : 'Node.js Runtime',
     });
   }
 
@@ -53,13 +104,20 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
+  const logs: string[] = [];
+  const log = (msg: string) => {
+    const entry = `[${new Date().toISOString().split('T')[1].slice(0, 8)}] ${msg}`;
+    logs.push(entry);
+    console.log(`[ReachVector Mail] ${entry}`);
+  };
+
   // Parse body if stringified
   let body = req.body;
   if (typeof body === 'string') {
     try {
       body = JSON.parse(body);
     } catch {
-      // keep as is
+      // keep
     }
   }
 
@@ -78,13 +136,15 @@ export default async function handler(req: any, res: any) {
   const safeInquiry = inquiryType || 'General Company Inquiry';
   const safeMessage = message || '(No message content provided)';
 
-  // 1. Email to Customer
+  log(`New inquiry received: Ref=${referenceCode}, From="${fullName}" <${email}>, Type="${safeInquiry}"`);
+
+  // 1. Customer Email Content
   const customerSubject = `We've received your inquiry — ReachVector Intelligence [Ref: ${referenceCode}]`;
   const customerText = `Hello ${fullName},
 
 Thank you for reaching out to ReachVector Intelligence regarding "${safeInquiry}".
 
-This email confirms that your message has been received by our team. We will review your inquiry and get back to you promptly.
+This email confirms that your message has been received by our engineering and product team. We will review your inquiry and get back to you promptly.
 
 Inquiry Reference: ${referenceCode}
 Time: ${timestamp}
@@ -140,7 +200,7 @@ contact@reachvector.in
 </div>
 `;
 
-  // 2. Email to ReachVector Team
+  // 2. Team Notification Content
   const teamSubject = `[Inquiry ${referenceCode}] ${safeInquiry} from ${fullName}`;
   const teamText = `
 New Contact Submission on ReachVector Intelligence:
@@ -191,22 +251,27 @@ ReachVector Intelligence Corporate Portal
 </div>
 `;
 
-  // Try Port 465 (SSL) first, then Port 587 (STARTTLS)
   const configs = [
-    { port: 465, secure: true },
-    { port: 587, secure: false },
+    { port: 465, secure: true, name: 'Port 465 (SSL)' },
+    { port: 587, secure: false, name: 'Port 587 (STARTTLS)' },
   ];
 
   let customerSent = false;
   let teamSent = false;
-  let lastError: string | null = null;
+  let activeError: string | null = null;
 
   for (const cfg of configs) {
+    log(`Attempting SMTP connection via ${cfg.name}...`);
     try {
       const transporter = createTransporter(cfg.port, cfg.secure);
 
-      // Send to customer first
-      await transporter.sendMail({
+      // Verify connection first
+      await transporter.verify();
+      log(`✅ ${cfg.name} verification succeeded!`);
+
+      // 1. Send confirmation to customer
+      log(`Sending customer confirmation email to <${email}>...`);
+      const cRes = await transporter.sendMail({
         from: `"ReachVector Intelligence" <contact@reachvector.in>`,
         to: email,
         subject: customerSubject,
@@ -214,9 +279,11 @@ ReachVector Intelligence Corporate Portal
         html: customerHtml,
       });
       customerSent = true;
+      log(`✅ Customer confirmation sent! MessageID: ${cRes.messageId}`);
 
-      // Send to team
-      await transporter.sendMail({
+      // 2. Send notification to team
+      log(`Sending team notification email to <contact@reachvector.in>...`);
+      const tRes = await transporter.sendMail({
         from: `"ReachVector Inquiries" <contact@reachvector.in>`,
         to: 'contact@reachvector.in',
         replyTo: `"${fullName}" <${email}>`,
@@ -225,21 +292,25 @@ ReachVector Intelligence Corporate Portal
         html: teamHtml,
       });
       teamSent = true;
-      break; // Success!
+      log(`✅ Team notification sent! MessageID: ${tRes.messageId}`);
+      break; // Success with this configuration
     } catch (err: any) {
-      lastError = err?.message || String(err);
-      console.warn(`[Vercel Function SMTP Port ${cfg.port}] Error:`, lastError);
+      activeError = err?.message || String(err);
+      log(`❌ ${cfg.name} failed: ${activeError}`);
     }
   }
+
+  log(`Dispatch summary: customerSent=${customerSent}, teamSent=${teamSent}`);
 
   return res.status(200).json({
     success: true,
     referenceCode,
     customerEmailSent: customerSent,
     teamEmailSent: teamSent,
-    error: lastError,
+    error: activeError,
+    logs,
     message: customerSent && teamSent
       ? 'Inquiry received and emails dispatched successfully.'
-      : 'Inquiry received and logged.',
+      : 'Inquiry received. SMTP notification queued.',
   });
 }

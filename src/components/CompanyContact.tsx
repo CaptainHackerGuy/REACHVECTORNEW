@@ -17,6 +17,13 @@ export const CompanyContact: React.FC = () => {
   const [copiedEmail, setCopiedEmail] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [deliveryStatus, setDeliveryStatus] = useState<{
+    customerSent?: boolean;
+    teamSent?: boolean;
+    error?: string;
+    logs?: string[];
+  } | null>(null);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,6 +39,13 @@ export const CompanyContact: React.FC = () => {
 
     const generatedCode = `RV-${Math.random().toString(36).substring(2, 7).toUpperCase()}-2026`;
 
+    console.group('📨 [ReachVector] Submitting Inquiry');
+    console.log('Timestamp:', new Date().toISOString());
+    console.log('Reference Code:', generatedCode);
+    console.log('Sender:', fullName, `<${email}>`);
+    console.log('Topic:', inquiryType);
+    console.log('Destination:', '/api/contact');
+
     try {
       const res = await fetch('/api/contact', {
         method: 'POST',
@@ -46,22 +60,44 @@ export const CompanyContact: React.FC = () => {
         }),
       });
 
-      const data = await res.json().catch(() => null);
+      console.log('HTTP Status:', res.status, res.statusText);
+      const data = await res.json().catch((parseErr) => {
+        console.warn('Could not parse response as JSON:', parseErr);
+        return null;
+      });
 
-      if (res.ok && data?.success) {
-        setReservationCode(data.referenceCode || generatedCode);
-        setSubmitted(true);
-      } else {
-        // Fallback gracefully if SMTP server or network encounters an issue
-        setReservationCode(generatedCode);
-        setSubmitted(true);
+      console.log('API Response:', data);
+
+      if (data?.logs && Array.isArray(data.logs)) {
+        console.group('📋 [SMTP Server Logs]');
+        data.logs.forEach((line: string) => console.log(line));
+        console.groupEnd();
       }
-    } catch (err) {
-      console.warn('Network error reaching contact API:', err);
-      // Fallback gracefully so user message is confirmed
+
+      if (data?.error) {
+        console.warn('⚠️ SMTP Result Note:', data.error);
+      }
+
+      setDeliveryStatus({
+        customerSent: data?.customerEmailSent,
+        teamSent: data?.teamEmailSent,
+        error: data?.error,
+        logs: data?.logs,
+      });
+
+      setReservationCode(data?.referenceCode || generatedCode);
+      setSubmitted(true);
+    } catch (err: any) {
+      console.error('❌ Network error contacting /api/contact:', err);
+      setDeliveryStatus({
+        customerSent: false,
+        teamSent: false,
+        error: err?.message || 'Network unreachable',
+      });
       setReservationCode(generatedCode);
       setSubmitted(true);
     } finally {
+      console.groupEnd();
       setIsSubmitting(false);
     }
   };
@@ -179,18 +215,66 @@ export const CompanyContact: React.FC = () => {
                   Thank you, <strong className="text-slate-900">{fullName || 'Inquirer'}</strong>. Our team has received your communication regarding <strong className="text-slate-900">{inquiryType}</strong>.
                 </p>
 
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 w-full max-w-sm mb-6 text-left">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 w-full max-w-sm mb-4 text-left">
                   <div className="text-[11px] font-mono text-slate-500 uppercase mb-1">Inquiry Reference Number</div>
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-mono text-sm font-bold text-slate-900">{reservationCode}</span>
                     <button
                       type="button"
                       onClick={handleCopyCode}
-                      className="px-2.5 py-1 text-xs font-medium rounded bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 flex items-center gap-1 active:scale-95 transition-all"
+                      className="px-2.5 py-1 text-xs font-medium rounded bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 flex items-center gap-1 active:scale-95 transition-all cursor-pointer"
                     >
                       {copiedCode ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
                       <span>{copiedCode ? 'Copied' : 'Copy'}</span>
                     </button>
+                  </div>
+                </div>
+
+                {/* Email Delivery Diagnostics Box */}
+                <div className="w-full max-w-sm mb-6 text-left space-y-2">
+                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1.5 font-mono">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Customer Receipt:</span>
+                      <span className={deliveryStatus?.customerSent ? 'text-emerald-700 font-bold' : 'text-slate-600'}>
+                        {deliveryStatus?.customerSent ? 'Dispatched' : 'Queued / Host Notice'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Team Delivery:</span>
+                      <span className={deliveryStatus?.teamSent ? 'text-emerald-700 font-bold' : 'text-slate-600'}>
+                        {deliveryStatus?.teamSent ? 'Delivered' : 'Queued for Team'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Direct Mail Client Fallback */}
+                  <div className="flex flex-col gap-2 pt-1">
+                    <a
+                      href={`mailto:contact@reachvector.in?subject=${encodeURIComponent(`[${reservationCode}] ${inquiryType} - ${fullName}`)}&body=${encodeURIComponent(`Inquiry Reference: ${reservationCode}\nName: ${fullName}\nEmail: ${email}\nCountry: ${country}\nTopic: ${inquiryType}\n\n${message}`)}`}
+                      className="w-full py-2 px-3 rounded-lg border border-slate-200 hover:border-slate-300 bg-white text-slate-700 hover:text-slate-950 text-xs font-semibold text-center transition-colors flex items-center justify-center gap-1.5 shadow-2xs"
+                    >
+                      <Mail className="w-3.5 h-3.5" />
+                      <span>Open Pre-filled Email in Mail App</span>
+                    </a>
+
+                    {deliveryStatus?.logs && deliveryStatus.logs.length > 0 && (
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => setShowDiagnostics(!showDiagnostics)}
+                          className="text-[11px] text-slate-500 hover:text-slate-800 underline block mx-auto cursor-pointer"
+                        >
+                          {showDiagnostics ? 'Hide Server Console Logs' : 'View Server Console Logs'}
+                        </button>
+                        {showDiagnostics && (
+                          <div className="mt-2 p-3 bg-slate-900 text-slate-200 rounded-lg text-[10px] font-mono overflow-x-auto max-h-40 text-left space-y-1">
+                            {deliveryStatus.logs.map((logLine, idx) => (
+                              <div key={idx} className="leading-tight">{logLine}</div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 

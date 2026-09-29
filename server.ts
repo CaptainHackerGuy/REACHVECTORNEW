@@ -278,6 +278,48 @@ ReachVector Intelligence Corporate Portal
   });
 });
 
+// Diagnostic GET probe for SMTP connectivity
+app.get(['/api/contact', '/api/test-email'], async (req, res) => {
+  const host = process.env.SMTP_HOST || 'mail.reachvector.in';
+  const user = process.env.SMTP_USER || 'contact@reachvector.in';
+  const logs: string[] = [];
+
+  logs.push(`[Diagnostic] Probing ${host}...`);
+  let port465Success = false;
+  let port465Error = '';
+  try {
+    const t465 = createMailTransporter(465, true);
+    await t465.verify();
+    port465Success = true;
+    logs.push(`[Port 465] Connected and authenticated successfully!`);
+  } catch (err: any) {
+    port465Error = err.message || String(err);
+    logs.push(`[Port 465] Connection failed: ${port465Error}`);
+  }
+
+  let port587Success = false;
+  let port587Error = '';
+  try {
+    const t587 = createMailTransporter(587, false);
+    await t587.verify();
+    port587Success = true;
+    logs.push(`[Port 587] Connected and authenticated successfully!`);
+  } catch (err: any) {
+    port587Error = err.message || String(err);
+    logs.push(`[Port 587] Connection failed: ${port587Error}`);
+  }
+
+  res.json({
+    status: 'diagnostic_complete',
+    timestamp: new Date().toISOString(),
+    host,
+    user,
+    port465: { status: port465Success ? 'SUCCESS' : 'FAILED', error: port465Error || null },
+    port587: { status: port587Success ? 'SUCCESS' : 'FAILED', error: port587Error || null },
+    logs,
+  });
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({
