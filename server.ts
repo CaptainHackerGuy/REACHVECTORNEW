@@ -344,6 +344,24 @@ ReachVector Intelligence Corporate Portal
   });
 });
 
+// Image Upload Endpoint (Binary or JSON)
+app.post('/api/upload-image-json', express.json({ limit: '25mb' }), (req, res) => {
+  try {
+    const { dataUrl, filename = 'about-hardware.png' } = req.body || {};
+    if (!dataUrl) return res.status(400).json({ error: 'No dataUrl provided' });
+    const base64Data = dataUrl.replace(/^data:image\/\w+;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+    const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '');
+    const filePath = path.join(__dirname, 'public', 'assets', safeName);
+    fs.writeFileSync(filePath, buffer);
+    console.log(`[Upload] Image saved to ${filePath} (${buffer.length} bytes)`);
+    return res.json({ success: true, url: `/assets/${safeName}` });
+  } catch (err: any) {
+    console.error('[Upload Error]', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // Diagnostic GET probe for SMTP connectivity
 app.get(['/api/contact', '/api/test-email'], async (req, res) => {
   const host = process.env.SMTP_HOST || 'mail.reachvector.in';
