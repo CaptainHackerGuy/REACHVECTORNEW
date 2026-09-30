@@ -30,15 +30,6 @@ export const CompanyAbout: React.FC<CompanyAboutProps> = () => {
             }}
             loading="lazy"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-900/10 via-transparent to-transparent pointer-events-none" />
-
-          {/* Minimal Persistent Engineering Badge */}
-          <div className="absolute bottom-2.5 left-2.5 sm:bottom-3 sm:left-3 flex items-center gap-2 bg-white/90 backdrop-blur-md px-2.5 py-1 rounded-md border border-slate-200/80 shadow-xs text-[11px] sm:text-xs font-mono text-slate-700">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="font-semibold text-slate-900">PurrfectBackup Hardware Architecture</span>
-            <span className="hidden sm:inline text-slate-300">·</span>
-            <span className="hidden sm:inline text-slate-500">Dual USB · OLED Matrix · Custom PCB</span>
-          </div>
         </div>
 
         {/* About Copy Narrative */}
